@@ -44,7 +44,12 @@ public class RewardGUI {
         int start = page * PAGE_SIZE;
 
         for (int i = 0; i < PAGE_SIZE && start + i < rewards.size(); i++) {
-            inventory.setItem(i, rewards.get(start + i));
+            int rewardIndex = start + i;
+            if (plugin.getRewardManager().isClaimed(targetUUID, rewardIndex)) {
+                inventory.setItem(i, createClaimedItem());
+            } else {
+                inventory.setItem(i, rewards.get(rewardIndex));
+            }
         }
 
         ItemStack glass = createGlassPane();
@@ -102,6 +107,14 @@ public class RewardGUI {
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();
         meta.setDisplayName(name);
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    private ItemStack createClaimedItem() {
+        ItemStack item = new ItemStack(Material.BEDROCK);
+        ItemMeta meta = item.getItemMeta();
+        meta.setDisplayName(ChatColor.DARK_GRAY + "Geclaimd");
         item.setItemMeta(meta);
         return item;
     }

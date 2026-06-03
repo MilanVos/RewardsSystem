@@ -14,6 +14,8 @@ import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.ItemStack;
 
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public class GUIListener implements Listener {
@@ -61,6 +63,21 @@ public class GUIListener implements Listener {
             gui.prevPage();
         } else if (slot == RewardGUI.SLOT_NEXT) {
             gui.nextPage();
+        } else if (slot >= 0 && slot < 45 && player.getUniqueId().equals(gui.getTargetUUID())) {
+            int rewardIndex = gui.getPage() * 45 + slot;
+            List<ItemStack> rewards = plugin.getRewardManager().getRewards(gui.getTargetUUID());
+            if (rewardIndex >= rewards.size()) return;
+            if (plugin.getRewardManager().isClaimed(gui.getTargetUUID(), rewardIndex)) return;
+
+            ItemStack reward = rewards.get(rewardIndex).clone();
+            Map<Integer, ItemStack> leftover = player.getInventory().addItem(reward);
+            if (!leftover.isEmpty()) {
+                player.sendMessage(ChatColor.RED + "Je inventory is vol! Maak ruimte en probeer opnieuw.");
+                return;
+            }
+            plugin.getRewardManager().claimReward(gui.getTargetUUID(), rewardIndex);
+            gui.refresh();
+            player.sendMessage(ChatColor.GREEN + "Je hebt " + reward.getType().name() + " geclaimd!");
         }
     }
 
