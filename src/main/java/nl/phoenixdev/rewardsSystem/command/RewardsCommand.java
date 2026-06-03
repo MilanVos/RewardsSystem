@@ -38,7 +38,7 @@ public class RewardsCommand implements CommandExecutor {
         }
 
         if (args.length == 0) {
-            sendHelp(player);
+            handleView(player, args);
             return true;
         }
 
@@ -47,6 +47,7 @@ public class RewardsCommand implements CommandExecutor {
             case "remove" -> handleRemove(player, args);
             case "view" -> handleView(player, args);
             case "storage" -> handleStorage(player, args);
+            case "help" -> sendHelp(player);
             default -> sendHelp(player);
         }
 
@@ -55,16 +56,33 @@ public class RewardsCommand implements CommandExecutor {
 
     private void handleAdd(Player sender, String[] args) {
         if (args.length < 3) {
-            sender.sendMessage(ChatColor.RED + "Gebruik: /rewards add <speler> <hand|inventory|storage> [index]");
+            sender.sendMessage(ChatColor.RED + "Gebruik: /rewards add <speler|all> <hand|inventory|storage> [naam]");
             return;
         }
 
-        Player target = Bukkit.getPlayer(args[1]);
-        if (target == null) {
-            sender.sendMessage(ChatColor.RED + "Speler niet gevonden: " + args[1]);
-            return;
-        }
+        boolean all = args[1].equalsIgnoreCase("all");
 
+        if (!all) {
+            Player target = Bukkit.getPlayer(args[1]);
+            if (target == null) {
+                sender.sendMessage(ChatColor.RED + "Speler niet gevonden: " + args[1]);
+                return;
+            }
+            addRewardToPlayer(sender, target.getUniqueId(), target.getName(), args);
+        } else {
+            List<? extends Player> online = Bukkit.getOnlinePlayers().stream().toList();
+            if (online.isEmpty()) {
+                sender.sendMessage(ChatColor.RED + "Er zijn geen spelers online.");
+                return;
+            }
+            for (Player target : online) {
+                addRewardToPlayer(sender, target.getUniqueId(), null, args);
+            }
+            sender.sendMessage(ChatColor.GREEN + "Reward toegevoegd aan " + online.size() + " speler(s).");
+        }
+    }
+
+    private void addRewardToPlayer(Player sender, UUID targetUUID, String targetName, String[] args) {
         switch (args[2].toLowerCase()) {
             case "hand" -> {
                 ItemStack item = sender.getInventory().getItemInMainHand();
@@ -72,34 +90,37 @@ public class RewardsCommand implements CommandExecutor {
                     sender.sendMessage(ChatColor.RED + "Je houdt niets vast.");
                     return;
                 }
-                plugin.getRewardManager().addReward(target.getUniqueId(), item);
-                sender.sendMessage(ChatColor.GREEN + item.getType().name() + " toegevoegd aan de rewards van " + target.getName() + ".");
+                plugin.getRewardManager().addReward(targetUUID, item);
+                if (targetName != null) {
+                    sender.sendMessage(ChatColor.GREEN + item.getType().name() + " toegevoegd aan de rewards van " + targetName + ".");
+                }
             }
             case "inventory" -> {
-                InventoryPickerGUI gui = new InventoryPickerGUI(plugin, sender, target.getUniqueId(), target.getName());
+                if (targetName == null) {
+                    sender.sendMessage(ChatColor.RED + "Inventory picker werkt niet met 'all'.");
+                    return;
+                }
+                InventoryPickerGUI gui = new InventoryPickerGUI(plugin, sender, targetUUID, targetName);
                 plugin.getOpenPickerGUIs().put(sender.getUniqueId(), gui);
                 gui.open(sender);
             }
             case "storage" -> {
                 if (args.length < 4) {
-                    sender.sendMessage(ChatColor.RED + "Gebruik: /rewards add <speler> storage <index>");
+                    sender.sendMessage(ChatColor.RED + "Gebruik: /rewards add <speler|all> storage <naam>");
                     return;
                 }
-                try {
-                    int index = Integer.parseInt(args[3]) - 1;
-                    List<ItemStack> storageItems = plugin.getStorageManager().getItems();
-                    if (index < 0 || index >= storageItems.size()) {
-                        sender.sendMessage(ChatColor.RED + "Ongeldig index. Opslag heeft " + storageItems.size() + " item(s).");
-                        return;
-                    }
-                    ItemStack item = storageItems.get(index);
-                    plugin.getRewardManager().addReward(target.getUniqueId(), item);
-                    sender.sendMessage(ChatColor.GREEN + item.getType().name() + " (opslag #" + args[3] + ") toegevoegd aan de rewards van " + target.getName() + ".");
-                } catch (NumberFormatException e) {
-                    sender.sendMessage(ChatColor.RED + "Index moet een getal zijn.");
+                String storageName = args[3].toLowerCase();
+                ItemStack storageItem = plugin.getStorageManager().getItem(storageName);
+                if (storageItem == null) {
+                    sender.sendMessage(ChatColor.RED + "Geen item gevonden in opslag met naam: " + storageName);
+                    return;
+                }
+                plugin.getRewardManager().addReward(targetUUID, storageItem);
+                if (targetName != null) {
+                    sender.sendMessage(ChatColor.GREEN + "'" + storageName + "' toegevoegd aan de rewards van " + targetName + ".");
                 }
             }
-            default -> sender.sendMessage(ChatColor.RED + "Gebruik: /rewards add <speler> <hand|inventory|storage> [index]");
+            default -> sender.sendMessage(ChatColor.RED + "Gebruik: /rewards add <speler|all> <hand|inventory|storage> [naam]");
         }
     }
 
@@ -142,7 +163,9 @@ public class RewardsCommand implements CommandExecutor {
 
     private void handleView(Player sender, String[] args) {
         if (args.length < 2) {
-            sender.sendMessage(ChatColor.RED + "Gebruik: /rewards view <speler>");
+            RewardGUI gui = new RewardGUI(plugin, sender.getUniqueId(), sender.getName());
+            plugin.getOpenRewardGUIs().put(sender.getUniqueId(), gui);
+            gui.open(sender);
             return;
         }
 
@@ -177,30 +200,29 @@ public class RewardsCommand implements CommandExecutor {
 
         switch (args[1].toLowerCase()) {
             case "add" -> {
+                if (args.length < 3) {
+                    sender.sendMessage(ChatColor.RED + "Gebruik: /rewards storage add <naam>");
+                    return;
+                }
                 ItemStack item = sender.getInventory().getItemInMainHand();
                 if (item.getType() == Material.AIR) {
                     sender.sendMessage(ChatColor.RED + "Je houdt niets vast.");
                     return;
                 }
-                plugin.getStorageManager().addItem(item);
-                int newIndex = plugin.getStorageManager().getItems().size();
-                sender.sendMessage(ChatColor.GREEN + item.getType().name() + " toegevoegd aan de opslag. (Index: " + newIndex + ")");
+                String addName = args[2].toLowerCase();
+                plugin.getStorageManager().addItem(addName, item);
+                sender.sendMessage(ChatColor.GREEN + item.getType().name() + " opgeslagen onder naam '" + addName + "'.");
             }
             case "remove" -> {
                 if (args.length < 3) {
-                    sender.sendMessage(ChatColor.RED + "Gebruik: /rewards storage remove <index>");
+                    sender.sendMessage(ChatColor.RED + "Gebruik: /rewards storage remove <naam>");
                     return;
                 }
-                try {
-                    int index = Integer.parseInt(args[2]) - 1;
-                    if (plugin.getStorageManager().removeItem(index)) {
-                        sender.sendMessage(ChatColor.GREEN + "Item #" + args[2] + " verwijderd uit de opslag.");
-                    } else {
-                        int total = plugin.getStorageManager().getItems().size();
-                        sender.sendMessage(ChatColor.RED + "Ongeldig index. Opslag heeft " + total + " item(s).");
-                    }
-                } catch (NumberFormatException e) {
-                    sender.sendMessage(ChatColor.RED + "Index moet een getal zijn.");
+                String removeName = args[2].toLowerCase();
+                if (plugin.getStorageManager().removeItem(removeName)) {
+                    sender.sendMessage(ChatColor.GREEN + "'" + removeName + "' verwijderd uit de opslag.");
+                } else {
+                    sender.sendMessage(ChatColor.RED + "Geen item gevonden in opslag met naam: " + removeName);
                 }
             }
             case "view" -> {
@@ -214,13 +236,13 @@ public class RewardsCommand implements CommandExecutor {
 
     private void sendHelp(Player player) {
         player.sendMessage(ChatColor.GOLD + "=== Rewards Systeem ===");
-        player.sendMessage(ChatColor.YELLOW + "/rewards add <speler> hand" + ChatColor.WHITE + " - Voeg item in hand toe");
+        player.sendMessage(ChatColor.YELLOW + "/rewards add <speler|all> hand" + ChatColor.WHITE + " - Voeg item in hand toe");
         player.sendMessage(ChatColor.YELLOW + "/rewards add <speler> inventory" + ChatColor.WHITE + " - Kies item uit inventaris");
-        player.sendMessage(ChatColor.YELLOW + "/rewards add <speler> storage <index>" + ChatColor.WHITE + " - Voeg opslag item toe");
+        player.sendMessage(ChatColor.YELLOW + "/rewards add <speler|all> storage <naam>" + ChatColor.WHITE + " - Voeg opslag item toe");
         player.sendMessage(ChatColor.YELLOW + "/rewards remove <speler> <index>" + ChatColor.WHITE + " - Verwijder een reward");
         player.sendMessage(ChatColor.YELLOW + "/rewards view <speler>" + ChatColor.WHITE + " - Bekijk rewards van speler");
-        player.sendMessage(ChatColor.YELLOW + "/rewards storage add" + ChatColor.WHITE + " - Voeg item toe aan opslag");
-        player.sendMessage(ChatColor.YELLOW + "/rewards storage remove <index>" + ChatColor.WHITE + " - Verwijder item uit opslag");
+        player.sendMessage(ChatColor.YELLOW + "/rewards storage add <naam>" + ChatColor.WHITE + " - Voeg item toe aan opslag");
+        player.sendMessage(ChatColor.YELLOW + "/rewards storage remove <naam>" + ChatColor.WHITE + " - Verwijder item uit opslag");
         player.sendMessage(ChatColor.YELLOW + "/rewards storage view" + ChatColor.WHITE + " - Bekijk de opslag");
     }
 }

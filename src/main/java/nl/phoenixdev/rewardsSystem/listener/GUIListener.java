@@ -11,6 +11,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.UUID;
@@ -98,6 +99,16 @@ public class GUIListener implements Listener {
             plugin.getRewardManager().addReward(gui.getTargetUUID(), item);
             player.sendMessage(ChatColor.GREEN + "Item toegevoegd aan de rewards van " + gui.getTargetName() + ".");
             player.closeInventory();
+        }
+    }
+
+    @EventHandler
+    public void onInventoryDrag(InventoryDragEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+        UUID uuid = player.getUniqueId();
+
+        if (plugin.getOpenRewardGUIs().containsKey(uuid) || plugin.getOpenStorageGUIs().containsKey(uuid) || plugin.getOpenPickerGUIs().containsKey(uuid)) {
+            event.setCancelled(true);
         }
     }
 

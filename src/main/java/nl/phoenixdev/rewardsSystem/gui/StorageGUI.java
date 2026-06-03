@@ -9,7 +9,9 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class StorageGUI {
 
@@ -35,11 +37,16 @@ public class StorageGUI {
     public void refresh() {
         inventory.clear();
 
-        List<ItemStack> items = plugin.getStorageManager().getItems();
+        List<Map.Entry<String, ItemStack>> entries = new ArrayList<>(plugin.getStorageManager().getItems().entrySet());
         int start = page * PAGE_SIZE;
 
-        for (int i = 0; i < PAGE_SIZE && start + i < items.size(); i++) {
-            inventory.setItem(i, items.get(start + i).clone());
+        for (int i = 0; i < PAGE_SIZE && start + i < entries.size(); i++) {
+            Map.Entry<String, ItemStack> entry = entries.get(start + i);
+            ItemStack display = entry.getValue().clone();
+            ItemMeta meta = display.getItemMeta();
+            meta.setDisplayName(ChatColor.AQUA + entry.getKey());
+            display.setItemMeta(meta);
+            inventory.setItem(i, display);
         }
 
         ItemStack glass = createGlassPane();
@@ -53,14 +60,14 @@ public class StorageGUI {
 
         inventory.setItem(SLOT_CLOSE, createItem(Material.BARRIER, ChatColor.RED + "Sluiten"));
 
-        if (start + PAGE_SIZE < items.size()) {
+        if (start + PAGE_SIZE < entries.size()) {
             inventory.setItem(SLOT_NEXT, createItem(Material.ARROW, ChatColor.YELLOW + "Volgende pagina"));
         }
     }
 
     public void nextPage() {
-        List<ItemStack> items = plugin.getStorageManager().getItems();
-        if ((page + 1) * PAGE_SIZE < items.size()) {
+        List<?> entries = new ArrayList<>(plugin.getStorageManager().getItems().entrySet());
+        if ((page + 1) * PAGE_SIZE < entries.size()) {
             page++;
             refresh();
         }

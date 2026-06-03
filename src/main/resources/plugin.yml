@@ -1,5 +1,15 @@
 name: RewardsSystem
 version: '${version}'
-
 main: nl.phoenixdev.rewardsSystem.RewardsSystem
 api-version: '1.21'
+
+commands:
+  rewards:
+    description: Beheer player rewards
+    usage: /rewards <add|remove|view|storage>
+    permission: rewardssystem.admin
+
+permissions:
+  rewardssystem.admin:
+    description: Toegang tot alle rewards commando's
+    default: op
