@@ -1,0 +1,5 @@
+name: RewardsSystem
+version: '${version}'
+
+main: nl.phoenixdev.rewardsSystem.RewardsSystem
+api-version: '1.21'
